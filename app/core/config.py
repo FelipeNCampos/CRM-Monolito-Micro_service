@@ -8,6 +8,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Aplicação
@@ -35,6 +36,16 @@ class Settings(BaseSettings):
     # Rate limiting
     password_reset_rate_limit_minutes: int = 15
     password_reset_max_attempts: int = 5
+
+    # Email / SMTP
+    mail_server: str = "localhost"
+    mail_port: int = 1025
+    mail_use_tls: bool = False
+    mail_username: str = ""
+    mail_password: str = ""
+    mail_from_email: str = "no-reply@crm.local"
+    mail_from_name: str = "CRM Backend"
+    password_reset_url_base: str = "http://localhost:3000/reset-password"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
