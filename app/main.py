@@ -51,6 +51,7 @@ from app.modules.contacts.router import router as contacts_router
 from app.modules.accounts.router import router as accounts_router
 from app.modules.activities.router import router as activities_router
 from app.modules.opportunities.router import router as opportunities_router
+from app.modules.reports.router import router as reports_router
 from app.modules.audit.router import router as audit_router
 
 app.include_router(auth_router, prefix=settings.api_prefix)
@@ -58,6 +59,7 @@ app.include_router(contacts_router, prefix=settings.api_prefix)
 app.include_router(accounts_router, prefix=settings.api_prefix)
 app.include_router(activities_router, prefix=settings.api_prefix)
 app.include_router(opportunities_router, prefix=settings.api_prefix)
+app.include_router(reports_router, prefix=settings.api_prefix)
 app.include_router(audit_router, prefix=settings.api_prefix)
 
 

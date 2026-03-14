@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import time
 import uuid
+import asyncio
 from pathlib import Path
 
 
@@ -155,6 +156,7 @@ TEST_ADMIN_PASSWORD = "Coto1423"
 
 
 _test_engine = create_async_engine(settings.database_url, echo=False)
+_test_db_lock = asyncio.Lock()
 
 _TRUNCATE_ALL = text(
     """
@@ -190,8 +192,10 @@ async def setup_db():
 
 @pytest.fixture(autouse=True)
 async def truncate(setup_db):
-    async with _test_engine.begin() as conn:
-        await conn.execute(_TRUNCATE_ALL)
+    async with _test_db_lock:
+        async with _test_engine.begin() as conn:
+            await conn.execute(_TRUNCATE_ALL)
+        yield
 
 
 @pytest.fixture
