@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional, List
 
 from sqlalchemy import String, Boolean, ForeignKey, Numeric, Integer, Text, Date, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -55,6 +55,7 @@ class Opportunity(Base, UUIDMixin, TimestampMixin, AuditUserMixin):
     )
     lost_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    custom_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

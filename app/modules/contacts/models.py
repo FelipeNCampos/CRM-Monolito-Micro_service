@@ -2,7 +2,7 @@ import uuid
 from typing import Optional, List
 
 from sqlalchemy import String, Boolean, ForeignKey, Text, Table, Column
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,6 +37,7 @@ class Contact(Base, UUIDMixin, TimestampMixin, AuditUserMixin):
     lead_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     tags: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True, default=list)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    custom_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(

@@ -23,6 +23,7 @@ class Account(Base, UUIDMixin, TimestampMixin, AuditUserMixin):
     address: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    custom_fields: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Self-referential hierarchy (matriz/filiais)
