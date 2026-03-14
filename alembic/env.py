@@ -21,6 +21,7 @@ from app.core.config import settings  # noqa: E402
 import app.modules.auth.models  # noqa: F401
 import app.modules.contacts.models  # noqa: F401
 import app.modules.accounts.models  # noqa: F401
+import app.modules.activities.models  # noqa: F401
 import app.modules.opportunities.models  # noqa: F401
 import app.modules.audit.models  # noqa: F401
 

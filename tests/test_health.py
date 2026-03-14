@@ -35,7 +35,28 @@ async def test_docs_redirect_root(client):
     assert r.headers["location"] == "/api/v1/docs"
 
 
+async def test_docs_page_exposes_postman_download(client):
+    r = await client.get("/api/v1/docs")
+    assert r.status_code == 200
+    assert "Baixar collection Postman" in r.text
+    assert "/api/v1/postman-collection.json" in r.text
+
+
 async def test_openapi_redirect_root(client):
     r = await client.get("/openapi.json", follow_redirects=False)
     assert r.status_code in (302, 307)
     assert r.headers["location"] == "/api/v1/openapi.json"
+
+
+async def test_postman_collection_download(client):
+    r = await client.get("/api/v1/postman-collection.json")
+    assert r.status_code == 200
+    assert (
+        r.headers["content-disposition"]
+        == 'attachment; filename="crm-backend-postman-collection.json"'
+    )
+
+    body = r.json()
+    assert body["info"]["name"].endswith("Postman Collection")
+    assert any(variable["key"] == "baseUrl" for variable in body["variable"])
+    assert any(folder["name"] == "Health" for folder in body["item"])

@@ -48,8 +48,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: crm_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@crm.local
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: admin@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: Coto1423
     ports:
       - "5050:80"
     depends_on:

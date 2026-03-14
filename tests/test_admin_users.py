@@ -1,6 +1,8 @@
 """Testes dos endpoints de administração de usuários."""
 import uuid
 
+TEST_ADMIN_EMAIL = "admin@gmail.com"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # POST /admin/users
@@ -105,7 +107,7 @@ async def test_list_users_returns_paginated_response(client, admin_headers):
 async def test_list_users_includes_seeded_admin(client, admin_headers):
     r = await client.get("/api/v1/admin/users", headers=admin_headers)
     emails = [u["email"] for u in r.json()["items"]]
-    assert "admin@crmapp.com" in emails
+    assert TEST_ADMIN_EMAIL in emails
 
 
 async def test_list_users_pagination(client, admin_headers):

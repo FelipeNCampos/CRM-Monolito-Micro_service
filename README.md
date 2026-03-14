@@ -237,8 +237,8 @@ A API usa **Bearer Token (JWT)**. O endpoint de login segue o padrão OAuth2 com
 ```bash
 # Login
 curl -X POST http://localhost:8000/api/v1/auth/login \
-  -F "username=admin@crm.local" \
-  -F "password=Admin@1234"
+  -F "username=admin@gmail.com" \
+  -F "password=Coto1423"
 
 # Resposta
 # { "access_token": "...", "refresh_token": "...", "token_type": "bearer" }
@@ -396,8 +396,8 @@ CRM-Monolito-Micro_service/
 
 | Serviço | Usuário / Login | Senha |
 |---|---|---|
-| API (admin) | `admin@crm.local` | `Admin@1234` |
-| pgAdmin | `admin@crm.local` | `admin123` |
+| API (admin) | `admin@gmail.com` | `Coto1423` |
+| pgAdmin | `admin@gmail.com` | `Coto1423` |
 | PostgreSQL | `crm_user` | `crm_strong_pass_2024` |
 | Mailpit | — | sem autenticação |
 

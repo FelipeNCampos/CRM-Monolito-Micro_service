@@ -5,6 +5,9 @@ from jose import jwt
 
 from app.core.config import settings
 
+TEST_ADMIN_EMAIL = "admin@gmail.com"
+TEST_ADMIN_PASSWORD = "Coto1423"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # POST /auth/login
@@ -13,7 +16,7 @@ from app.core.config import settings
 async def test_login_success(client):
     r = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "Admin@1234"},
+        data={"username": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
     )
     assert r.status_code == 200
     body = r.json()
@@ -25,7 +28,7 @@ async def test_login_success(client):
 async def test_login_returns_valid_jwt_payload(client):
     r = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "Admin@1234"},
+        data={"username": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
     )
     token = r.json()["access_token"]
     payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
@@ -38,7 +41,7 @@ async def test_login_returns_valid_jwt_payload(client):
 async def test_login_wrong_password(client):
     r = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "WrongPass!1"},
+        data={"username": TEST_ADMIN_EMAIL, "password": "WrongPass!1"},
     )
     assert r.status_code == 401
 
@@ -46,7 +49,7 @@ async def test_login_wrong_password(client):
 async def test_login_nonexistent_email(client):
     r = await client.post(
         "/api/v1/auth/login",
-        data={"username": "ghost_nobody@nowhere.com", "password": "Admin@1234"},
+        data={"username": "ghost_nobody@nowhere.com", "password": TEST_ADMIN_PASSWORD},
     )
     assert r.status_code == 401
 
@@ -73,7 +76,7 @@ async def test_login_requires_form_data_not_json(client):
     """O endpoint de login exige form-data (OAuth2), não JSON."""
     r = await client.post(
         "/api/v1/auth/login",
-        json={"username": "admin@crmapp.com", "password": "Admin@1234"},
+        json={"username": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
     )
     assert r.status_code == 422
 
@@ -118,7 +121,7 @@ async def test_refresh_using_access_token_fails(client, admin_headers):
 async def test_forgot_password_known_email_returns_token(client):
     r = await client.post(
         "/api/v1/auth/forgot-password",
-        json={"email": "admin@crmapp.com"},
+        json={"email": TEST_ADMIN_EMAIL},
     )
     assert r.status_code == 200
     body = r.json()
@@ -144,7 +147,7 @@ async def test_forgot_password_unknown_email_still_returns_200(client):
 async def test_reset_password_success(client):
     fp = await client.post(
         "/api/v1/auth/forgot-password",
-        json={"email": "admin@crmapp.com"},
+        json={"email": TEST_ADMIN_EMAIL},
     )
     reset_token = fp.json()["dev_token"]
 
@@ -157,7 +160,7 @@ async def test_reset_password_success(client):
     # Confirma login com nova senha
     login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "NewPass@99"},
+        data={"username": TEST_ADMIN_EMAIL, "password": "NewPass@99"},
     )
     assert login.status_code == 200
 
@@ -174,7 +177,7 @@ async def test_reset_password_token_reuse_fails(client):
     """Token já utilizado não pode ser reutilizado."""
     fp = await client.post(
         "/api/v1/auth/forgot-password",
-        json={"email": "admin@crmapp.com"},
+        json={"email": TEST_ADMIN_EMAIL},
     )
     token = fp.json()["dev_token"]
 
@@ -194,7 +197,7 @@ async def test_reset_password_weak_password_fails(client):
     """Senha fraca deve falhar na validação do schema (422)."""
     fp = await client.post(
         "/api/v1/auth/forgot-password",
-        json={"email": "admin@crmapp.com"},
+        json={"email": TEST_ADMIN_EMAIL},
     )
     token = fp.json()["dev_token"]
     r = await client.post(
@@ -212,7 +215,7 @@ async def test_get_me_authenticated(client, admin_headers):
     r = await client.get("/api/v1/auth/me", headers=admin_headers)
     assert r.status_code == 200
     body = r.json()
-    assert body["email"] == "admin@crmapp.com"
+    assert body["email"] == TEST_ADMIN_EMAIL
     assert "id" in body
     assert "roles" in body
     assert "admin" in body["roles"]
@@ -246,7 +249,7 @@ async def test_get_me_malformed_header(client):
 async def test_change_password_success(client, admin_headers):
     r = await client.post(
         "/api/v1/auth/change-password",
-        json={"current_password": "Admin@1234", "new_password": "Changed@1234"},
+        json={"current_password": TEST_ADMIN_PASSWORD, "new_password": "Changed@1234"},
         headers=admin_headers,
     )
     assert r.status_code == 204
@@ -264,7 +267,7 @@ async def test_change_password_wrong_current(client, admin_headers):
 async def test_change_password_unauthenticated(client):
     r = await client.post(
         "/api/v1/auth/change-password",
-        json={"current_password": "Admin@1234", "new_password": "Changed@1234"},
+        json={"current_password": TEST_ADMIN_PASSWORD, "new_password": "Changed@1234"},
     )
     assert r.status_code == 401
 
@@ -272,7 +275,7 @@ async def test_change_password_unauthenticated(client):
 async def test_change_password_weak_new_password(client, admin_headers):
     r = await client.post(
         "/api/v1/auth/change-password",
-        json={"current_password": "Admin@1234", "new_password": "weak"},
+        json={"current_password": TEST_ADMIN_PASSWORD, "new_password": "weak"},
         headers=admin_headers,
     )
     assert r.status_code == 422

@@ -150,6 +150,9 @@ from app.core.config import settings
 from app.core.database import Base
 from app.main import app
 
+TEST_ADMIN_EMAIL = "admin@gmail.com"
+TEST_ADMIN_PASSWORD = "Coto1423"
+
 
 _test_engine = create_async_engine(settings.database_url, echo=False)
 
@@ -157,6 +160,8 @@ _TRUNCATE_ALL = text(
     """
     TRUNCATE TABLE
         audit_logs,
+        activities,
+        activity_types,
         contact_accounts,
         user_roles,
         permissions,
@@ -204,7 +209,7 @@ async def client(truncate):
 async def admin_headers(client):
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "Admin@1234"},
+        data={"username": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
     )
     assert response.status_code == 200, f"Login do admin falhou: {response.text}"
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -214,7 +219,7 @@ async def admin_headers(client):
 async def admin_refresh_token(client):
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@crmapp.com", "password": "Admin@1234"},
+        data={"username": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
     )
     assert response.status_code == 200, f"Login do admin falhou: {response.text}"
     return response.json()["refresh_token"]

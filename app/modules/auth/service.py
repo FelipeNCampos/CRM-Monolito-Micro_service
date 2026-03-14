@@ -371,13 +371,22 @@ class AuthService:
 
     async def seed_default_roles(self) -> None:
         """Cria papéis padrão se não existirem."""
-        MODULES = ["contacts", "accounts", "opportunities", "pipeline", "reports", "admin", "audit"]
+        modules = [
+            "contacts",
+            "accounts",
+            "activities",
+            "opportunities",
+            "pipeline",
+            "reports",
+            "admin",
+            "audit",
+        ]
 
         default_roles = [
             {
                 "name": RoleName.ADMIN,
                 "description": "Administrador com acesso total",
-                "perms": {m: (True, True, True, True) for m in MODULES},
+                "perms": {m: (True, True, True, True) for m in modules},
             },
             {
                 "name": RoleName.MANAGER,
@@ -385,6 +394,7 @@ class AuthService:
                 "perms": {
                     "contacts": (True, True, True, False),
                     "accounts": (True, True, True, False),
+                    "activities": (True, True, True, False),
                     "opportunities": (True, True, True, False),
                     "pipeline": (True, True, True, False),
                     "reports": (False, True, False, False),
@@ -398,6 +408,7 @@ class AuthService:
                 "perms": {
                     "contacts": (True, True, True, False),
                     "accounts": (True, True, True, False),
+                    "activities": (True, True, True, False),
                     "opportunities": (True, True, True, False),
                     "pipeline": (False, True, True, False),
                     "reports": (False, True, False, False),
@@ -409,35 +420,49 @@ class AuthService:
                 "name": RoleName.VIEWER,
                 "description": "Visualizador (somente leitura)",
                 "perms": {
-                    m: (False, True, False, False) for m in MODULES
+                    m: (False, True, False, False) for m in modules
                 },
             },
         ]
 
         for role_def in default_roles:
-            exists = await self.db.execute(
+            role_result = await self.db.execute(
                 select(Role).where(Role.name == role_def["name"])
             )
-            if exists.scalar_one_or_none():
-                continue
+            role = role_result.scalar_one_or_none()
 
-            role = Role(
-                id=uuid.uuid4(),
-                name=role_def["name"],
-                description=role_def["description"],
-            )
-            role.permissions = [
-                Permission(
+            if role is None:
+                role = Role(
                     id=uuid.uuid4(),
-                    role_id=role.id,
-                    module=mod,
-                    can_create=perms[0],
-                    can_read=perms[1],
-                    can_update=perms[2],
-                    can_delete=perms[3],
+                    name=role_def["name"],
+                    description=role_def["description"],
                 )
-                for mod, perms in role_def["perms"].items()
-            ]
-            self.db.add(role)
+                self.db.add(role)
+            else:
+                role.description = role_def["description"]
+
+            permissions_result = await self.db.execute(
+                select(Permission).where(Permission.role_id == role.id)
+            )
+            existing_permissions = {
+                permission.module: permission
+                for permission in permissions_result.scalars().all()
+            }
+
+            for mod, perms in role_def["perms"].items():
+                permission = existing_permissions.get(mod)
+                if permission is None:
+                    permission = Permission(
+                        id=uuid.uuid4(),
+                        role_id=role.id,
+                        module=mod,
+                    )
+                    self.db.add(permission)
+                    existing_permissions[mod] = permission
+
+                permission.can_create = perms[0]
+                permission.can_read = perms[1]
+                permission.can_update = perms[2]
+                permission.can_delete = perms[3]
 
         await self.db.flush()
