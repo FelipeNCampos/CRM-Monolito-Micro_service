@@ -30,6 +30,24 @@ class OpportunityService:
         self.db = db
         self.audit = audit
 
+    async def _refresh_opportunity(self, opp: Opportunity) -> Opportunity:
+        await self.db.refresh(
+            opp,
+            [
+                "stage",
+                "contact",
+                "account",
+                "created_at",
+                "updated_at",
+                "closed_at",
+                "status",
+                "lost_reason",
+                "probability",
+                "stage_id",
+            ],
+        )
+        return opp
+
     # ──────────────── Pipeline Stages ────────────────
 
     async def create_stage(
@@ -160,8 +178,7 @@ class OpportunityService:
             user_id=creator_id,
             new_values={"title": opp.title, "value": str(opp.value)},
         )
-        await self.db.refresh(opp, ["stage", "contact", "account"])
-        return opp
+        return await self._refresh_opportunity(opp)
 
     async def get(self, opp_id: UUID) -> Opportunity:
         result = await self.db.execute(
@@ -239,7 +256,6 @@ class OpportunityService:
 
         opp.updated_by = updater_id
         await self.db.flush()
-        await self.db.refresh(opp)
         await self.audit.log(
             entity_type="opportunity",
             entity_id=opp.id,
@@ -248,7 +264,7 @@ class OpportunityService:
             old_values=old,
             new_values={"title": opp.title, "stage_id": str(opp.stage_id)},
         )
-        return opp
+        return await self._refresh_opportunity(opp)
 
     async def move_stage(
         self, opp_id: UUID, data: OpportunityMoveStage, updater_id: Optional[UUID] = None
@@ -271,8 +287,7 @@ class OpportunityService:
             old_values={"stage_id": str(old_stage_id)},
             new_values={"stage_id": str(stage.id), "stage_name": stage.name},
         )
-        await self.db.refresh(opp, ["stage"])
-        return opp
+        return await self._refresh_opportunity(opp)
 
     async def close(
         self, opp_id: UUID, data: OpportunityClose, actor_id: Optional[UUID] = None
@@ -306,7 +321,7 @@ class OpportunityService:
                 "closed_at": opp.closed_at.isoformat() if opp.closed_at else None,
             },
         )
-        return opp
+        return await self._refresh_opportunity(opp)
 
     async def get_pipeline_view(
         self,

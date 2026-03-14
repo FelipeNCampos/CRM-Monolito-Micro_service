@@ -1,14 +1,12 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator
 
 from app.modules.opportunities.models import OpportunityStatus
 
-
-# ──────────────── Pipeline Stages ────────────────
 
 class PipelineStageCreate(BaseModel):
     name: str
@@ -40,8 +38,6 @@ class PipelineStageResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ──────────────── Opportunities ────────────────
 
 class OpportunityCreate(BaseModel):
     title: str
@@ -90,12 +86,6 @@ class OpportunityClose(BaseModel):
         if v == OpportunityStatus.ACTIVE:
             raise ValueError("Status deve ser 'won' ou 'lost'")
         return v
-
-    @model_validator(mode="after")
-    def validate_lost_reason(self) -> "OpportunityClose":
-        if self.status == OpportunityStatus.LOST and not self.lost_reason:
-            raise ValueError("Motivo de perda obrigatório ao marcar como perdida")
-        return self
 
 
 class StageSummary(BaseModel):

@@ -6,7 +6,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
 
@@ -57,6 +57,21 @@ app.include_router(audit_router, prefix=settings.api_prefix)
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "ok", "version": "0.1.0", "env": settings.app_env}
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs_redirect():
+    return RedirectResponse(url=f"{settings.api_prefix}/docs")
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_redirect():
+    return RedirectResponse(url=f"{settings.api_prefix}/redoc")
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_redirect():
+    return RedirectResponse(url=f"{settings.api_prefix}/openapi.json")
 
 
 @app.get(f"{settings.api_prefix}/health", tags=["Health"])

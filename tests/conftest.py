@@ -1,50 +1,158 @@
 """
-Suite de testes de integração do CRM Backend.
+Suite de testes de integracao do CRM Backend.
 
-Pré-requisito: banco de dados `crm_test` deve existir no PostgreSQL.
+Por padrao, a suite sobe/reutiliza um PostgreSQL temporario em Docker
+para nao depender das credenciais definidas no `.env` local.
 
-  psql -U postgres -c "CREATE DATABASE crm_test OWNER crm_user;"
+Se voce quiser apontar para um banco especifico, defina:
 
-A variável POSTGRES_DB pode ser sobrescrita antes de executar:
-
-  POSTGRES_DB=crm_test pytest
-
-Por padrão, as credenciais são lidas do arquivo .env (mesmo host/porta/usuário),
-substituindo apenas o nome do banco.
+  TEST_POSTGRES_HOST
+  TEST_POSTGRES_PORT
+  TEST_POSTGRES_DB
+  TEST_POSTGRES_USER
+  TEST_POSTGRES_PASSWORD
 """
+
 import os
+import shutil
+import subprocess
+import time
 import uuid
 from pathlib import Path
 
-# ── Carrega .env da raiz do projeto antes de qualquer importação do app ───────
-# Necessário quando pytest é executado de dentro de tests/ ou de qualquer
-# diretório que não seja a raiz, já que pydantic-settings resolve env_file
-# relativo ao cwd e não encontraria o .env nesse caso.
-_env_path = Path(__file__).parent.parent / ".env"
-if _env_path.exists():
-    for _line in _env_path.read_text(encoding="utf-8").splitlines():
-        _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _, _v = _line.partition("=")
-            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
-# Garante uso do banco de testes (sobrescreve qualquer valor anterior)
-os.environ["POSTGRES_DB"] = "crm_test"
+def _load_dotenv() -> None:
+    env_path = Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def _docker(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["docker", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _docker_available() -> bool:
+    return shutil.which("docker") is not None
+
+
+def _container_exists(name: str) -> bool:
+    return _docker("inspect", name).returncode == 0
+
+
+def _container_running(name: str) -> bool:
+    result = _docker("inspect", "-f", "{{.State.Running}}", name)
+    return result.returncode == 0 and result.stdout.strip().lower() == "true"
+
+
+def _container_port(name: str) -> str | None:
+    result = _docker("port", name, "5432/tcp")
+    if result.returncode != 0:
+        return None
+
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line:
+            return line.rsplit(":", 1)[-1]
+    return None
+
+
+def _ensure_managed_test_database(
+    *,
+    db_name: str,
+    user: str,
+    password: str,
+    container_name: str,
+) -> tuple[str, str]:
+    if not _docker_available():
+        raise RuntimeError(
+            "Docker nao esta disponivel e nenhum TEST_POSTGRES_* foi definido para os testes."
+        )
+
+    if _container_exists(container_name):
+        if not _container_running(container_name):
+            result = _docker("start", container_name)
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    else:
+        result = _docker(
+            "run",
+            "--name",
+            container_name,
+            "-e",
+            f"POSTGRES_DB={db_name}",
+            "-e",
+            f"POSTGRES_USER={user}",
+            "-e",
+            f"POSTGRES_PASSWORD={password}",
+            "-p",
+            "127.0.0.1::5432",
+            "-d",
+            "postgres:16-alpine",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        port = _container_port(container_name)
+        if port:
+            ready = _docker("exec", container_name, "pg_isready", "-U", user, "-d", db_name)
+            if ready.returncode == 0:
+                return "127.0.0.1", port
+        time.sleep(1)
+
+    raise RuntimeError(f"Banco de teste Docker `{container_name}` nao ficou pronto a tempo.")
+
+
+_load_dotenv()
+
+test_db_name = os.getenv("TEST_POSTGRES_DB", "crm_test")
+test_db_user = os.getenv("TEST_POSTGRES_USER", "crm_user")
+test_db_password = os.getenv("TEST_POSTGRES_PASSWORD", "crm_strong_pass_2024")
+test_db_container = os.getenv("TEST_POSTGRES_CONTAINER", "crm_test_db_pytest")
+test_db_host = os.getenv("TEST_POSTGRES_HOST")
+test_db_port = os.getenv("TEST_POSTGRES_PORT")
+
+if not (test_db_host and test_db_port):
+    test_db_host, test_db_port = _ensure_managed_test_database(
+        db_name=test_db_name,
+        user=test_db_user,
+        password=test_db_password,
+        container_name=test_db_container,
+    )
+
+os.environ["POSTGRES_DB"] = test_db_name
+os.environ["POSTGRES_HOST"] = test_db_host
+os.environ["POSTGRES_PORT"] = test_db_port
+os.environ["POSTGRES_USER"] = test_db_user
+os.environ["POSTGRES_PASSWORD"] = test_db_password
+os.environ["APP_ENV"] = "test"
+os.environ["DEBUG"] = "false"
+os.environ.setdefault("SECRET_KEY", "test-secret-key-change-me-32-chars")
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
-# Importações do app ocorrem APÓS definir a variável de ambiente.
-from app.core.database import Base
 from app.core.config import settings
+from app.core.database import Base
 from app.main import app
 
-# Engine exclusivo para os testes (aponta para crm_test via settings).
+
 _test_engine = create_async_engine(settings.database_url, echo=False)
 
-# SQL para limpar todas as tabelas em cascata entre testes.
 _TRUNCATE_ALL = text(
     """
     TRUNCATE TABLE
@@ -64,11 +172,8 @@ _TRUNCATE_ALL = text(
 )
 
 
-# ─── Setup do esquema (uma vez por sessão) ────────────────────────────────────
-
 @pytest.fixture(scope="session")
 async def setup_db():
-    """Cria todas as tabelas no banco de testes; descarta ao final da sessão."""
     async with _test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
@@ -78,72 +183,53 @@ async def setup_db():
     await _test_engine.dispose()
 
 
-# ─── Isolamento entre testes ──────────────────────────────────────────────────
-
 @pytest.fixture(autouse=True)
 async def truncate(setup_db):
-    """Trunca todas as tabelas ANTES de cada teste para isolamento total."""
     async with _test_engine.begin() as conn:
         await conn.execute(_TRUNCATE_ALL)
 
 
-# ─── Cliente HTTP ─────────────────────────────────────────────────────────────
-
 @pytest.fixture
 async def client(truncate):
-    """
-    AsyncClient apontado para o app com o banco de testes.
-    ASGITransport não dispara eventos de lifespan, por isso o seed é chamado
-    explicitamente antes de cada teste para garantir os papéis padrão e o
-    usuário admin@crmapp.com.
-    """
     from app.main import _seed_initial_data
+
     await _seed_initial_data()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
-        yield c
+    ) as client:
+        yield client
 
-
-# ─── Headers de autenticação ──────────────────────────────────────────────────
 
 @pytest.fixture
 async def admin_headers(client):
-    """Headers Bearer do admin padrão (admin@crmapp.com / Admin@1234)."""
-    r = await client.post(
+    response = await client.post(
         "/api/v1/auth/login",
         data={"username": "admin@crmapp.com", "password": "Admin@1234"},
     )
-    assert r.status_code == 200, f"Login do admin falhou: {r.text}"
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert response.status_code == 200, f"Login do admin falhou: {response.text}"
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 @pytest.fixture
 async def admin_refresh_token(client):
-    """Refresh token do admin padrão."""
-    r = await client.post(
+    response = await client.post(
         "/api/v1/auth/login",
         data={"username": "admin@crmapp.com", "password": "Admin@1234"},
     )
-    assert r.status_code == 200, f"Login do admin falhou: {r.text}"
-    return r.json()["refresh_token"]
+    assert response.status_code == 200, f"Login do admin falhou: {response.text}"
+    return response.json()["refresh_token"]
 
 
 @pytest.fixture
 async def no_perm_headers(client, admin_headers):
-    """
-    Headers de um usuário autenticado mas sem nenhuma permissão.
-    Útil para verificar respostas 403 nos endpoints protegidos.
-    """
     suffix = uuid.uuid4().hex[:8]
     email = f"noperm_{suffix}@test.com"
 
-    # Cria papel sem permissões
     role_resp = await client.post(
         "/api/v1/admin/roles",
         json={
             "name": f"empty_role_{suffix}",
-            "description": "Papel sem permissões",
+            "description": "Papel sem permissoes",
             "permissions": [],
         },
         headers=admin_headers,
@@ -151,11 +237,10 @@ async def no_perm_headers(client, admin_headers):
     assert role_resp.status_code == 201, role_resp.text
     role_id = role_resp.json()["id"]
 
-    # Cria usuário com esse papel
     user_resp = await client.post(
         "/api/v1/admin/users",
         json={
-            "name": "Sem Permissão",
+            "name": "Sem Permissao",
             "email": email,
             "password": "Test@1234",
             "role_ids": [role_id],
@@ -164,7 +249,6 @@ async def no_perm_headers(client, admin_headers):
     )
     assert user_resp.status_code == 201, user_resp.text
 
-    # Faz login
     login_resp = await client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": "Test@1234"},
