@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class AddressSchema(BaseModel):
@@ -28,6 +28,13 @@ class AccountCreate(BaseModel):
     owner_id: Optional[UUID] = None
     contact_ids: Optional[list[UUID]] = None
 
+    @field_validator("cnpj")
+    @classmethod
+    def validate_cnpj(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and len(value) > 18:
+            raise ValueError("CNPJ deve ter no maximo 18 caracteres")
+        return value
+
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
@@ -40,6 +47,13 @@ class AccountUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     owner_id: Optional[UUID] = None
     contact_ids: Optional[list[UUID]] = None
+
+    @field_validator("cnpj")
+    @classmethod
+    def validate_cnpj(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and len(value) > 18:
+            raise ValueError("CNPJ deve ter no maximo 18 caracteres")
+        return value
 
 
 class ContactSummary(BaseModel):

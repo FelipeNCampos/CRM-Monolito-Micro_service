@@ -103,6 +103,7 @@ API: `http://localhost:8000/api/v1/docs`
 | Servico | URL | Descricao |
 |---|---|---|
 | API | `http://localhost:8000` | FastAPI com hot reload |
+| Frontend | `http://localhost:5173` | Workspace React da Fase 1 e 2 |
 | Swagger UI | `http://localhost:8000/api/v1/docs` | Documentacao interativa |
 | ReDoc | `http://localhost:8000/api/v1/redoc` | Documentacao alternativa |
 | Postman Collection | `http://localhost:8000/api/v1/postman-collection.json` | Collection gerada a partir do OpenAPI |
@@ -116,6 +117,7 @@ API: `http://localhost:8000/api/v1/docs`
 docker compose up --build
 docker compose up -d
 docker compose logs -f app
+docker compose logs -f frontend
 docker compose down
 docker compose down -v
 ```
@@ -144,6 +146,7 @@ uv lock --upgrade
 docker compose exec app uv run pytest -v
 uv run pytest -v
 uv run pytest --cov=app --cov-report=html
+cd frontend && npm run test:e2e
 ```
 
 ### Rodar sem Docker
@@ -152,6 +155,15 @@ uv run pytest --cov=app --cov-report=html
 uv sync
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
+cd frontend && npm install && npm run dev
+```
+
+### Frontend E2E
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
 
 ---

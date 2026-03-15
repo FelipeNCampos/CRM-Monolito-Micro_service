@@ -42,6 +42,10 @@ class AuthService:
         self.audit = audit
         self.email_service = email_service or SMTPEmailService()
 
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        return email.strip().lower()
+
     async def login(
         self,
         data: LoginRequest,
@@ -50,7 +54,7 @@ class AuthService:
     ) -> TokenResponse:
         result = await self.db.execute(
             select(User)
-            .where(User.email == data.email.lower())
+            .where(User.email == self._normalize_email(data.email))
             .options(selectinload(User.roles).selectinload(Role.permissions))
         )
         user = result.scalar_one_or_none()
@@ -118,7 +122,9 @@ class AuthService:
         )
 
     async def forgot_password(self, email: str) -> str | None:
-        result = await self.db.execute(select(User).where(User.email == email.lower()))
+        result = await self.db.execute(
+            select(User).where(User.email == self._normalize_email(email))
+        )
         user = result.scalar_one_or_none()
         if not user or not user.is_active:
             return None
@@ -175,14 +181,15 @@ class AuthService:
         )
 
     async def create_user(self, data: UserCreate, creator_id: Optional[UUID] = None) -> User:
-        result = await self.db.execute(select(User).where(User.email == data.email.lower()))
+        normalized_email = self._normalize_email(data.email)
+        result = await self.db.execute(select(User).where(User.email == normalized_email))
         if result.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="E-mail ja cadastrado")
 
         user = User(
             id=uuid.uuid4(),
             name=data.name,
-            email=data.email.lower(),
+            email=normalized_email,
             password_hash=hash_password(data.password),
         )
         if data.role_ids:
@@ -237,7 +244,13 @@ class AuthService:
         if data.name is not None:
             user.name = data.name
         if data.email is not None:
-            user.email = data.email.lower()
+            normalized_email = self._normalize_email(data.email)
+            result = await self.db.execute(
+                select(User).where(User.email == normalized_email, User.id != user_id)
+            )
+            if result.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail="E-mail ja cadastrado")
+            user.email = normalized_email
         if data.is_active is not None:
             user.is_active = data.is_active
         if data.role_ids is not None:

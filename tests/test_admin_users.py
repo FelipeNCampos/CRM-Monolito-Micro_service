@@ -62,6 +62,21 @@ async def test_create_user_duplicate_email(client, admin_headers):
     assert r.status_code == 409
 
 
+async def test_create_user_duplicate_email_is_case_insensitive(client, admin_headers):
+    email = f"dupcase_{uuid.uuid4().hex[:8]}@test.com"
+    await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Dup", "email": email.upper(), "password": "Test@1234", "role_ids": []},
+        headers=admin_headers,
+    )
+    r = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Dup", "email": email, "password": "Test@1234", "role_ids": []},
+        headers=admin_headers,
+    )
+    assert r.status_code == 409
+
+
 async def test_create_user_unauthenticated(client):
     r = await client.post(
         "/api/v1/admin/users",
@@ -216,6 +231,30 @@ async def test_update_user_add_role(client, admin_headers):
     )
     assert r.status_code == 200
     assert len(r.json()["roles"]) >= 1
+
+
+async def test_update_user_duplicate_email_returns_409(client, admin_headers):
+    first_email = f"first_{uuid.uuid4().hex[:8]}@test.com"
+    second_email = f"second_{uuid.uuid4().hex[:8]}@test.com"
+
+    first = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "First", "email": first_email, "password": "Test@1234", "role_ids": []},
+        headers=admin_headers,
+    )
+    second = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Second", "email": second_email, "password": "Test@1234", "role_ids": []},
+        headers=admin_headers,
+    )
+
+    user_id = second.json()["id"]
+    r = await client.put(
+        f"/api/v1/admin/users/{user_id}",
+        json={"email": first_email.upper()},
+        headers=admin_headers,
+    )
+    assert r.status_code == 409
 
 
 async def test_update_user_not_found(client, admin_headers):

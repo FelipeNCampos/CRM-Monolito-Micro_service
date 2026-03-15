@@ -152,9 +152,11 @@ async def _seed_initial_data():
             await auth.seed_default_roles()
             await activities.seed_default_types()
 
-            # Create initial admin user if no users exist
-            result = await db.execute(select(User))
-            if not result.scalar_one_or_none():
+            # Create initial admin user only when the database is empty.
+            existing_users = (
+                await db.execute(select(select(User.id).limit(1).exists()))
+            ).scalar_one()
+            if not existing_users:
                 admin_role = (
                     await db.execute(select(Role).where(Role.name == RoleName.ADMIN))
                 ).scalar_one_or_none()

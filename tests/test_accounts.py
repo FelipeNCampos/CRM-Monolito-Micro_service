@@ -95,6 +95,24 @@ async def test_create_account_no_permission(client, no_perm_headers):
     assert r.status_code == 403
 
 
+async def test_create_account_invalid_owner_returns_400(client, admin_headers):
+    r = await client.post(
+        "/api/v1/accounts",
+        json=_account_payload(owner_id="3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+        headers=admin_headers,
+    )
+    assert r.status_code == 400
+
+
+async def test_create_account_invalid_cnpj_returns_422(client, admin_headers):
+    r = await client.post(
+        "/api/v1/accounts",
+        json=_account_payload(cnpj="1234567890123456789"),
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # GET /accounts
 # ──────────────────────────────────────────────────────────────────────────────
@@ -251,6 +269,17 @@ async def test_update_account_no_permission(client, no_perm_headers, admin_heade
         headers=no_perm_headers,
     )
     assert r.status_code == 403
+
+
+async def test_update_account_invalid_owner_returns_400(client, admin_headers):
+    ap = await client.post("/api/v1/accounts", json=_account_payload(), headers=admin_headers)
+    aid = ap.json()["id"]
+    r = await client.put(
+        f"/api/v1/accounts/{aid}",
+        json={"owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 400
 
 
 # ──────────────────────────────────────────────────────────────────────────────

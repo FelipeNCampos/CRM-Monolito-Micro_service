@@ -2,9 +2,9 @@ import type { WorkspaceSnapshot } from "./types";
 
 export const demoSnapshot: WorkspaceSnapshot = {
   mode: "demo",
-  heroTitle: "Central operacional preparada para a Fase 2.",
+  heroTitle: "Central operacional pronta para o dia a dia do CRM.",
   heroCopy:
-    "Um workspace unico para vendas, operacao e governanca, com estrutura pronta para crescer com marketing, suporte e observabilidade nas fases 3 e 4.",
+    "Um workspace unico para vendas, operacao e governanca, com estrutura pronta para crescer com novos modulos, suporte e observabilidade.",
   heroHighlights: [
     "Navegacao organizada por dominio e preparada para novos modulos.",
     "Camada de dados desacoplada para alternar entre API real e modo demonstracao.",
@@ -30,8 +30,8 @@ export const demoSnapshot: WorkspaceSnapshot = {
       status: "warning"
     },
     {
-      title: "Roadmap da Fase 3",
-      subtitle: "Estrutura pronta para marketing, segmentacao e campanhas.",
+      title: "Expansao de capacidades",
+      subtitle: "Arquitetura pronta para novos modulos de marketing e atendimento.",
       stamp: "Planejamento ativo",
       status: "neutral"
     }

@@ -15,6 +15,13 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+export class AuthError extends Error {
+  constructor(message = "Sua sessao nao e mais valida.") {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
 type PaginatedResponse<T> = {
   items: T[];
   total: number;
@@ -217,6 +224,10 @@ async function fetchJson<T>(path: string, token: string): Promise<T> {
     },
   });
 
+  if (response.status === 401 || response.status === 403) {
+    throw new AuthError();
+  }
+
   if (!response.ok) {
     throw new Error(`Falha ao carregar ${path}`);
   }
@@ -380,7 +391,7 @@ function buildAdministration(
     },
     {
       title: "Cobertura RBAC",
-      description: "Permissoes preparadas para crescer junto das fases 3 e 4.",
+      description: "Permissoes preparadas para crescer junto de novos modulos.",
       detail: `${modules.size} modulos mapeados por permissao.`,
       status: "ok",
     },
@@ -463,7 +474,7 @@ export async function loadWorkspaceSnapshot(
       mode: "live",
       heroTitle: "Operacao comercial integrada com leitura em tempo real.",
       heroCopy:
-        "A base da Fase 2 esta conectada a API do CRM e organizada para evoluir com marketing, segmentacao, campanhas e suporte nas fases seguintes.",
+        "A base atual esta conectada a API do CRM e organizada para evoluir com marketing, segmentacao, campanhas e suporte.",
       heroHighlights: [
         `${contacts.total} contatos e ${accounts.total} contas ativos sincronizados com o backend.`,
         `${activities.total} atividades monitoradas com relatorios operacionais ja disponiveis.`,
@@ -500,7 +511,11 @@ export async function loadWorkspaceSnapshot(
       reports: buildReports(salesDashboard, pipelineReport, activitiesReport),
       administration: buildAdministration(users, roles, audit),
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthError) {
+      throw error;
+    }
+
     return demoSnapshot;
   }
 }

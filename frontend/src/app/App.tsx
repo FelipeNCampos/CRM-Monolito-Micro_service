@@ -6,9 +6,16 @@ import {
   useState,
 } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
-import { loadWorkspaceSnapshot, loginRequest } from "./api";
+import { AuthError, loadWorkspaceSnapshot, loginRequest } from "./api";
 import { demoSnapshot } from "./mockData";
 import type {
   ActivityRow,
@@ -23,6 +30,7 @@ import type {
 } from "./types";
 
 const SESSION_KEY = "crm.frontend.session";
+const LIVE_REFRESH_INTERVAL_MS = 3000;
 
 const modules: Array<{
   key: ModuleKey;
@@ -64,7 +72,7 @@ const modules: Array<{
     key: "reports",
     path: "/reports",
     title: "Relatorios",
-    description: "Analise operacional da Fase 2.",
+    description: "Analise operacional do CRM.",
   },
   {
     key: "administration",
@@ -157,10 +165,13 @@ function currentTitle(pathname: string): string {
 }
 
 export function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [session, setSession] = useState<SessionState | null>(() => restoreSession());
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(demoSnapshot);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (session) {
@@ -187,11 +198,18 @@ export function App() {
     }
 
     let cancelled = false;
-    setWorkspaceLoading(true);
-    setFeedback(null);
+    let refreshTimeout: number | undefined;
+    const liveSession = session;
 
-    void loadWorkspaceSnapshot(session.accessToken)
-      .then((nextSnapshot) => {
+    async function refreshWorkspace(isInitialLoad: boolean) {
+      if (isInitialLoad) {
+        setWorkspaceLoading(true);
+        setFeedback(null);
+      }
+
+      try {
+        const nextSnapshot = await loadWorkspaceSnapshot(liveSession.accessToken);
+
         if (cancelled) {
           return;
         }
@@ -202,29 +220,71 @@ export function App() {
 
         setFeedback(
           nextSnapshot.mode === "live"
-            ? "Workspace conectado ao backend da Fase 2."
+            ? "Workspace conectado ao backend do CRM. Atualizacao automatica a cada 3 segundos."
             : "Algumas rotas nao responderam; exibindo modo demonstracao.",
         );
-      })
-      .finally(() => {
-        if (!cancelled) {
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        if (error instanceof AuthError) {
+          setAuthMessage("Sua sessao expirou. Entre novamente para continuar.");
+          startTransition(() => {
+            setSession(null);
+            setSnapshot(demoSnapshot);
+          });
+          navigate("/login", {
+            replace: true,
+            state: {
+              from: `${location.pathname}${location.search}`,
+            },
+          });
+          return;
+        }
+      } finally {
+        if (!cancelled && isInitialLoad) {
           setWorkspaceLoading(false);
         }
-      });
+      }
+
+      if (!cancelled) {
+        refreshTimeout = window.setTimeout(() => {
+          void refreshWorkspace(false);
+        }, LIVE_REFRESH_INTERVAL_MS);
+      }
+    }
+
+    void refreshWorkspace(true);
 
     return () => {
       cancelled = true;
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout);
+      }
     };
-  }, [session]);
+  }, [location.pathname, location.search, navigate, session]);
 
   async function handleLogin(email: string, password: string) {
     const nextSession = await loginRequest(email, password);
+    const targetPath =
+      typeof location.state === "object" &&
+      location.state !== null &&
+      "from" in location.state &&
+      typeof location.state.from === "string" &&
+      location.state.from !== "/login"
+        ? location.state.from
+        : "/";
+
+    setAuthMessage(null);
     startTransition(() => {
       setSession(nextSession);
     });
+    navigate(targetPath, { replace: true });
   }
 
   function handleDemoAccess() {
+    setAuthMessage(null);
     startTransition(() => {
       setSnapshot(demoSnapshot);
       setSession({
@@ -233,31 +293,73 @@ export function App() {
         email: "demo@crm.local",
       });
     });
+    navigate("/", { replace: true });
   }
 
   function handleLogout() {
+    setAuthMessage(null);
     startTransition(() => {
       setSession(null);
       setSnapshot(demoSnapshot);
     });
-  }
-
-  if (!session) {
-    return <LoginPage onLogin={handleLogin} onDemoAccess={handleDemoAccess} />;
+    navigate("/login", { replace: true });
   }
 
   return (
-    <AppShell
-      session={session}
-      snapshot={snapshot}
-      feedback={feedback}
-      workspaceLoading={workspaceLoading}
-      onLogout={handleLogout}
-    />
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          session ? (
+            <Navigate replace to="/" />
+          ) : (
+            <LoginPage
+              message={authMessage}
+              onLogin={handleLogin}
+              onDemoAccess={handleDemoAccess}
+            />
+          )
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute session={session}>
+            <AppShell
+              session={session!}
+              snapshot={snapshot}
+              feedback={feedback}
+              workspaceLoading={workspaceLoading}
+              onLogout={handleLogout}
+            />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 
+function ProtectedRoute(props: {
+  session: SessionState | null;
+  children: ReactNode;
+}) {
+  const location = useLocation();
+
+  if (!props.session) {
+    return (
+      <Navigate
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+        to="/login"
+      />
+    );
+  }
+
+  return <>{props.children}</>;
+}
+
 function LoginPage(props: {
+  message: string | null;
   onLogin: (email: string, password: string) => Promise<void>;
   onDemoAccess: () => void;
 }) {
@@ -291,24 +393,24 @@ function LoginPage(props: {
       <div className="login-card">
         <section className="reveal-stagger">
           <div className="eyebrow">CRM Workspace</div>
-          <h1>Operacao comercial pronta para crescer ate as Fases 3 e 4.</h1>
+          <h1>Operacao comercial centralizada em um unico workspace.</h1>
           <p className="muted">
-            Shell executiva em React com integracao real da Fase 2, identidade
-            visual neutra e base preparada para marketing, campanhas, suporte e
-            novos paineis analiticos.
+            Shell executiva em React com integracao real do CRM, identidade
+            visual neutra e arquitetura preparada para novos modulos e paineis
+            analiticos.
           </p>
           <div className="support-grid" style={{ marginTop: 22 }}>
             <FutureCard
-              title="Fase 2 ativa"
-              copy="Contatos, contas, pipeline, atividades, relatorios e governanca em um unico fluxo."
+              title="Comercial"
+              copy="Contatos, contas e pipeline organizados em uma leitura unica da operacao."
             />
             <FutureCard
-              title="Fase 3 habilitada"
-              copy="Arquitetura pronta para leads, segmentacao e campanhas sem romper a shell atual."
+              title="Operacao"
+              copy="Atividades, relatorios e acompanhamento diario em uma mesma superficie."
             />
             <FutureCard
-              title="Fase 4 preparada"
-              copy="Espaco reservado para suporte, SLAs, base de conhecimento e monitoracao operacional."
+              title="Governanca"
+              copy="Permissoes, auditoria e estrutura pronta para expansoes futuras sem romper a shell atual."
             />
           </div>
         </section>
@@ -336,6 +438,7 @@ function LoginPage(props: {
                 placeholder="Sua senha"
               />
             </div>
+            {props.message ? <p className="muted">{props.message}</p> : null}
             {error ? <p className="muted">{error}</p> : null}
             <div className="auth-actions">
               <button className="button" disabled={submitting} type="submit">
@@ -350,21 +453,6 @@ function LoginPage(props: {
               </button>
             </div>
           </form>
-          <p className="muted" style={{ marginTop: 18 }}>
-            Links uteis:{" "}
-            <a href="http://localhost:8000/api/v1/docs" target="_blank" rel="noreferrer">
-              Swagger
-            </a>{" "}
-            e{" "}
-            <a
-              href="http://localhost:8000/api/v1/postman-collection.json"
-              target="_blank"
-              rel="noreferrer"
-            >
-              collection Postman
-            </a>
-            .
-          </p>
         </aside>
       </div>
     </div>
@@ -425,7 +513,7 @@ function AppShell(props: {
       <aside className="sidebar">
         <div className="brand-block reveal-stagger">
           <span className="brand-mark">CRM</span>
-          <h2 className="brand-title">Workspace Fase 2</h2>
+          <h2 className="brand-title">Workspace Comercial</h2>
           <p className="brand-copy">
             Shell corporativa pronta para absorver marketing, analytics,
             atendimento e novos modulos sem quebrar a navegacao principal.
@@ -535,7 +623,7 @@ function OverviewPage(props: {
     <div className="section-stack">
       <section className="hero-card reveal-stagger">
         <div>
-          <div className="eyebrow">Fases 1 e 2 operacionais</div>
+          <div className="eyebrow">Visao executiva</div>
           <h1>{props.snapshot.heroTitle}</h1>
           <p className="muted">{props.snapshot.heroCopy}</p>
           <div className="list" style={{ marginTop: 18 }}>
@@ -544,19 +632,6 @@ function OverviewPage(props: {
                 {item}
               </div>
             ))}
-          </div>
-          <div className="hero-actions" style={{ marginTop: 18 }}>
-            <a className="button" href="http://localhost:8000/api/v1/docs" target="_blank" rel="noreferrer">
-              Abrir docs
-            </a>
-            <a
-              className="ghost-button"
-              href="http://localhost:8000/api/v1/postman-collection.json"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Baixar Postman
-            </a>
           </div>
         </div>
 
@@ -571,8 +646,8 @@ function OverviewPage(props: {
             }
           />
           <Panel
-            eyebrow="Roadmap"
-            title="Expansao futura"
+            eyebrow="Arquitetura"
+            title="Expansao estrutural"
             copy="A shell atual ja separa os dominios que vao receber marketing, analytics, atendimento e automacoes."
           />
         </div>
@@ -595,7 +670,7 @@ function ContactsPage(props: {
     <div className="section-stack">
       <TableCard
         title="Leads e contatos"
-        eyebrow="Fase 1"
+        eyebrow="Relacionamento"
         copy="Base de relacionamento usada por pipeline, atividades e futuras campanhas de marketing."
       >
         <table>
@@ -637,7 +712,7 @@ function AccountsPage(props: {
     <div className="section-stack">
       <TableCard
         title="Contas e carteira"
-        eyebrow="Fase 1"
+        eyebrow="Carteira"
         copy="Organizacao de empresas, segmentos e ownership com base pronta para scoring e segmentacao."
       >
         <table>
@@ -677,7 +752,7 @@ function PipelinePage(props: {
     <div className="section-stack">
       <TableCard
         title="Oportunidades"
-        eyebrow="Fase 1"
+        eyebrow="Pipeline"
         copy="Pipeline comercial com visualizacao por negocio e resumo financeiro por etapa."
       >
         <table>
@@ -768,7 +843,7 @@ function ActivitiesPage(props: {
 
       <TableCard
         title="Atividades"
-        eyebrow="Fase 2"
+        eyebrow="Operacao"
         copy="Modulo operacional de tarefas e atividades preparado para automacoes futuras."
       >
         <table>
@@ -911,7 +986,7 @@ function AdministrationPage(props: {
         <header>
           <div>
             <div className="eyebrow">Expansao administrativa</div>
-            <h2>Base pronta para fases seguintes</h2>
+            <h2>Base pronta para expansao</h2>
           </div>
         </header>
         <div className="support-grid">
@@ -981,8 +1056,8 @@ function FutureModulesPanel() {
     <section className="panel reveal-stagger">
       <header>
         <div>
-          <div className="eyebrow">Roadmap</div>
-          <h2>Preparacao para Fases 3 e 4</h2>
+          <div className="eyebrow">Capacidades</div>
+          <h2>Preparacao para novos modulos</h2>
         </div>
       </header>
       <div className="support-grid">

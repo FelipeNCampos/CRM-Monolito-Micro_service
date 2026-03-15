@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     app_name: str = "CRM Backend"
     app_env: str = "development"
     debug: bool = False
+    sql_echo: bool = False
     api_prefix: str = "/api/v1"
 
     # JWT

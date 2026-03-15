@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.auth.models import User
 from app.modules.accounts.models import Account
 from app.modules.accounts.schemas import AccountCreate, AccountUpdate, AccountFilters
 from app.modules.audit.service import AuditService
@@ -28,6 +29,8 @@ class AccountService:
 
         if data.parent_id:
             await self._validate_no_cycle(data.parent_id, None)
+        if data.owner_id:
+            await self._validate_owner(data.owner_id)
 
         address_dict = data.address.model_dump() if data.address else None
 
@@ -120,6 +123,8 @@ class AccountService:
 
         if data.parent_id and data.parent_id != account.parent_id:
             await self._validate_no_cycle(data.parent_id, account_id)
+        if data.owner_id is not None and data.owner_id != account.owner_id:
+            await self._validate_owner(data.owner_id)
 
         if data.name is not None:
             account.name = data.name
@@ -208,3 +213,8 @@ class AccountService:
             )
             row = result.scalar_one_or_none()
             current_id = row
+
+    async def _validate_owner(self, owner_id: UUID) -> None:
+        exists = await self.db.execute(select(User.id).where(User.id == owner_id))
+        if exists.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Owner informado nao existe")
