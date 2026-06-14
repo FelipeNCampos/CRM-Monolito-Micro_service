@@ -1,0 +1,55 @@
+# docker-compose.override.yml
+#
+# Loaded automatically by Docker Compose alongside docker-compose.yml.
+# Purpose: local development overrides.
+
+services:
+  app:
+    restart: "no"
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      MAIL_SERVER: mailpit
+      MAIL_PORT: "1025"
+      MAIL_USE_TLS: "false"
+      MAIL_USERNAME: ""
+      MAIL_PASSWORD: ""
+    volumes:
+      - .:/app
+      - venv_dev:/app/.venv
+    command: >
+      sh -c "
+        echo '>>> Aguardando banco de dados...' &&
+        alembic upgrade head &&
+        echo '>>> Migracoes aplicadas. Iniciando API...' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app --log-level debug
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  db:
+    restart: "no"
+
+  pgadmin:
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: crm_mailpit
+    restart: "no"
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks:
+      - crm_network
+
+volumes:
+  venv_dev:
+  frontend_node_modules:
